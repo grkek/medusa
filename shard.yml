@@ -1,0 +1,12 @@
+name: medusa
+version: 0.1.0
+
+authors:
+  - Giorgi Kavrelishvili <giorgi.kavrelishvili@pm.me>
+
+scripts:
+  postinstall: "make clean && make quickjs && make build"
+
+crystal: 1.9.2
+
+license: MIT
