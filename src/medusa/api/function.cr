@@ -7,8 +7,8 @@ module Medusa
         QuickJS.NewCFunctionPointer Glue.wrap_procedure(procedure)
       end
 
-      def new_c_function(function_pointer : QuickJS::JSCFunction, name : String, length : LibC::Int) : Value
-        Value.new(@context, QuickJS.NewCFunction(@context, function_pointer, name, length))
+      def new_c_function(function_pointer : QuickJS::JSCFunction, name : String, length : LibC::Int) : ValueWrapper
+        ValueWrapper.new(@context, QuickJS.NewCFunction(@context, function_pointer, name, length))
       end
     end
   end

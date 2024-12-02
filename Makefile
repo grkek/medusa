@@ -1,4 +1,5 @@
 build:
+	mkdir -p ./bin
 	cc -std=c++20 -c ./src/ext/*.cpp -I${LIBGC}/include/ -o ./bin/medusa.o
 	ar rcs ./bin/medusa.a ./bin/*.o
 
