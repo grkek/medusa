@@ -3,11 +3,15 @@ module Medusa
     alias QuickJS = Binding::QuickJS
 
     def initialize
-      @rt = QuickJS.JS_NewRuntime
+      @runtime = QuickJS.JS_NewRuntime
     end
 
     def to_unsafe
-      @rt
+      @runtime
+    end
+
+    def finalize
+      QuickJS.JS_FreeRuntime(@runtime)
     end
   end
 end

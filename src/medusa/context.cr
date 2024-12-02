@@ -4,15 +4,17 @@ module Medusa
 
     include API::Eval
     include API::Function
-    include API::Get
-    include API::Set
 
-    def initialize(rt : QuickJS::JSRuntime)
-      @ctx = QuickJS.JS_NewContext(rt)
+    def initialize(runtime : QuickJS::JSRuntime)
+      @context = QuickJS.NewBuiltInContext(runtime)
     end
 
     def to_unsafe
-      @ctx
+      @context
+    end
+
+    def finalize
+      QuickJS.JS_FreeContext(@context)
     end
   end
 end

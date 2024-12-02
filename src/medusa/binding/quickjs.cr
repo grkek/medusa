@@ -70,23 +70,69 @@ module Medusa
         pointer : Void*
       end
 
-      fun JS_NewRuntime : JSRuntime
-      fun JS_NewContext = JS_NewBuiltInContext(runtime : JSRuntime) : JSContext
+      struct JSPropertyEnum
+        enumerable? : Bool
+        atom : LibC::UInt
+      end
 
-      fun JS_NewCFunctionPointer(crystalProcedure : CrystalProcedure) : JSCFunction
-      fun JS_NewCFunctionDefault(ctx : JSContext, func : JSCFunction, name : LibC::Char*, length : LibC::Int) : JSValue
+      fun JS_NewRuntime : JSRuntime
+      fun JS_NewObject(ctx : JSContext) : JSValue
+      fun JS_NewArray(ctx : JSContext) : JSValue
+
+      # Every time you change threads you must execute this otherwise a stack overflow error is thrown.
+      fun JS_UpdateStackTop(rt : JSRuntime) : Void
+
+      ### Begin helper functions
+      fun NewBuiltInContext(rt : JSRuntime) : JSContext
+      fun NewCFunctionPointer(crystal_procedure : CrystalProcedure) : JSCFunction
+      fun NewCFunction(ctx : JSContext, func : JSCFunction, name : LibC::Char*, length : LibC::Int) : JSValue
+      fun NewFloat64(ctx : JSContext, f : Float64) : JSValue
+      fun NewString(ctx : JSContext, str : LibC::Char*) : JSValue
+      fun NewInt32(ctx : JSContext, val : LibC::Int) : JSValue
+      fun NewInt64(ctx : JSContext, val : LibC::LongLong) : JSValue
+      fun NewBool(ctx : JSContext, val : Bool) : JSValue
+
+      fun IsUndefined(val : JSValue) : Bool
+
+      fun DupValue(ctx : JSContext, val : JSValue) : JSValue
+      fun FreeValue(ctx : JSContext, val : JSValue) : Void
+
+      fun ToCString(ctx : JSContext, val : JSValue) : LibC::Char*
+
+      fun GetProperty(ctx : JSContext, this_obj : JSValue, prop : LibC::UInt) : JSValue
+      ### End helper functions
 
       fun JS_Eval(ctx : JSContext, input : LibC::Char*, input_size : LibC::Int, filename : LibC::Char*, eval_flag : LibC::Int) : JSValue
+      fun JS_Call(ctx : JSContext, func_obj : JSValue, this_obj : JSValue, argc : LibC::Int, argv : JSValue*) : JSValue
+
+      fun JS_WriteObject(ctx : JSContext, psize : LibC::SizeT*, obj : JSValue, flags : LibC::Int) : LibC::Char*
+      fun JS_ReadObject(ctx : JSContext, buf : LibC::Char*, buf_len : LibC::SizeT, flags : LibC::Int) : JSValue
+
+      fun JS_IsError(ctx : JSContext, val : JSValue) : Bool
+      fun JS_IsArray(ctx : JSContext, val : JSValue) : Bool
+
+      fun JS_StrictEq(ctx : JSContext, op1 : JSValue, op2 : JSValue) : Bool
+
+      fun JS_AtomToCString(ctx : JSContext, atom : LibC::UInt) : LibC::Char*
+      fun JS_ToBool(ctx : JSContext, val : JSValue) : LibC::Int
+      fun JS_ToInt32(ctx : JSContext, pres : Int32*, val : JSValue) : LibC::Int
+      fun JS_ToInt64(ctx : JSContext, pres : Int64*, val : JSValue) : LibC::Int
+      fun JS_ToFloat64(ctx : JSContext, pres : Float64*, val : JSValue) : LibC::Int
+
+      fun JS_SetPropertyStr(ctx : JSContext, this_obj : JSValue, prop : LibC::Char*, val : JSValue) : LibC::Int
+      fun JS_SetPropertyUint32(ctx : JSContext, this_obj : JSValue, idx : LibC::UInt, val : JSValue, flags : LibC::Int) : LibC::Int
 
       fun JS_GetGlobalObject(ctx : JSContext) : JSValue
       fun JS_GetException(ctx : JSContext) : JSValue
+
+      fun JS_GetOwnPropertyNames(ctx : JSContext, ptab : JSPropertyEnum**, plen : LibC::UInt*, obj : JSValue, flags : LibC::Int) : LibC::Int
+      fun JS_GetArrayBuffer(ctx : JSContext, psize : LibC::SizeT*, obj : JSValue) : LibC::Char*
+      fun JS_GetPropertyUint32(ctx : JSContext, this_obj : JSValue, idx : LibC::UInt) : JSValue
       fun JS_GetPropertyStr(ctx : JSContext, this_obj : JSValue, prop : LibC::Char*) : JSValue
 
-      fun JS_ValueToCString(ctx : JSContext, val : JSValue) : LibC::Char*
-
-      fun JS_SetPropertyStr(ctx : JSContext, this_obj : JSValue, prop : LibC::Char*, val : JSValue) : LibC::Int
-
-      fun JS_FreeValueDefault(ctx : JSContext, v : JSValue) : Void
+      fun JS_FreeRuntime(rt : JSRuntime) : Void
+      fun JS_FreeContext(ctx : JSContext) : Void
+      fun JS_FreeCString(ctx : JSContext, val : LibC::Char*) : Void
     end
   end
 end

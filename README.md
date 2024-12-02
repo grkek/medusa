@@ -1,6 +1,6 @@
 # Medusa
 
-A QuickJS wrapper with helper functions
+A WIP QuickJS wrapper with helper functions
 
 ## Installation
 
@@ -14,21 +14,15 @@ A QuickJS wrapper with helper functions
 
 2. Run `shards install`
 
+3. Update the Boehm GC include path in the .envrc file and source from it
+
 ## Usage
 
-```crystal
-require "medusa"
-```
-
-TODO: Write usage instructions here
-
-## Development
-
-TODO: Write development instructions here
+1. Run `make test`
 
 ## Contributing
 
-1. Fork it (<https://github.com/your-github-user/medusa/fork>)
+1. Fork it (<https://github.com/grkek/medusa/fork>)
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Commit your changes (`git commit -am 'Add some feature'`)
 4. Push to the branch (`git push origin my-new-feature`)
@@ -36,4 +30,4 @@ TODO: Write development instructions here
 
 ## Contributors
 
-- [Giorgi Kavrelishvili](https://github.com/your-github-user) - creator and maintainer
+- [Giorgi Kavrelishvili](https://github.com/grkek) - creator and maintainer

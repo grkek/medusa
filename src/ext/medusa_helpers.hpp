@@ -67,7 +67,7 @@ struct CrystalProcedure {
 
   /* Fun fact: If the Crystal `Proc` doesn't capture any context, it won't
    * allocate any - But also don't expect any!  We have to accomodate for this
-   * by only passing `this->self` iff it is non-NULL.
+   * by only passing `this->self` if it is non-NULL.
    */
 
   T operator()(Args ... arguments) const {

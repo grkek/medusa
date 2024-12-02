@@ -1,29 +1,31 @@
-require "./get"
-
 module Medusa
   module API
     module Eval
       alias QuickJS = Binding::QuickJS
 
-      include Get
-
-      def eval_string(input : String, eval_flag : QuickJS::Flag = QuickJS::Flag::STRICT) : Value
-        value = QuickJS.JS_Eval \
-          @ctx, input, input.size, UUID.random.to_s + ".js", eval_flag
+      def eval_string(input : String, eval_flag : QuickJS::Flag = QuickJS::Flag::STRICT, etag : String = "<input>") : ValueWrapper
+        value = QuickJS.JS_Eval(@context, input, input.size, etag, eval_flag)
 
         if value.tag == QuickJS::Tag::EXCEPTION
-          exception = get_exception
+          exception = ValueWrapper.new(@context, QuickJS.JS_GetException(@context))
 
           case exception.to_unsafe.tag
           when QuickJS::Tag::STRING
-            raise exception.to_s
+            raise Exceptions::InternalException.new(message: exception.as_s, stack: nil)
           when QuickJS::Tag::OBJECT
-            message = get_property_str(exception, "message")
-            raise message.to_s
+            if QuickJS.JS_IsError(@context, exception)
+              stack_value = exception["stack"]
+
+              unless QuickJS.IsUndefined(stack_value)
+                raise Exceptions::InternalException.new(message: exception.["message"].as_s, stack: stack_value.as_s)
+              end
+            end
+
+            raise Exceptions::InternalException.new(message: exception.["message"].as_s, stack: nil)
           end
         end
 
-        Value.new(@ctx, value)
+        ValueWrapper.new(@context, value)
       end
     end
   end
