@@ -66,17 +66,23 @@ function_pointer = engine.context.new_c_function_pointer(
     #   values.push(value)
     # end
 
-    pp texts
-
     # You have to return JSValue to the Proc
-    Medusa::ValueWrapper.new(context, "Return value :)").to_unsafe
+    Medusa::ValueWrapper.new(engine.context.to_unsafe, context.to_s).to_unsafe
   }
 )
 
 function = engine.context.new_c_function(function_pointer, "helloWorld", 0)
 
+puts engine.context.to_unsafe
+
 # Provied a local 'this' by wrapping an empty hash
+this = Medusa::ValueWrapper.new(engine.context.to_unsafe, {} of String => JSON::Any)
 
-value5 = engine.call(function, Medusa::ValueWrapper.new(engine.context.to_unsafe, {} of String => JSON::Any))
+calls = 0
 
-puts value5.as_s
+loop do
+  value5 = engine.call(function, this)
+  calls += 1
+
+  puts "Calls: #{calls}"
+end

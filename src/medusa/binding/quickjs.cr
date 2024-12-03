@@ -79,6 +79,8 @@ module Medusa
       fun JS_NewObject(ctx : JSContext) : JSValue
       fun JS_NewArray(ctx : JSContext) : JSValue
 
+      fun JS_RunGC(rt : JSRuntime) : Void
+
       # Every time you change threads you must execute this otherwise a stack overflow error is thrown.
       fun JS_UpdateStackTop(rt : JSRuntime) : Void
 
