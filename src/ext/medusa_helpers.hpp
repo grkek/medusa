@@ -6,10 +6,19 @@
 #include <stdlib.h> // abort()
 #include <stdio.h> // fprintf()
 
-// Compiler branching hint
-#define likely(x) __builtin_expect(!!(x), 1)
+// Compiler branching hint, guarded for portability
+#ifdef __GNUC__
+#define LIKELY(x) __builtin_expect(!!(x), 1)
+#else
+#define LIKELY(x) (x)
+#endif
 
+// Fatal error handler
+#ifdef __GNUC__
 static __attribute__((noreturn)) void fatal_panic(const char *message) {
+#else
+static void fatal_panic(const char *message) {
+#endif
   fprintf(stderr, "Fatal error in bindings: %s\n", message);
   abort();
 }
@@ -21,16 +30,20 @@ static __attribute__((noreturn)) void fatal_panic(const char *message) {
 #include <utility>
 #include <new>
 
-// Break C++'s encapsulation to allow easy wrapping of protected methods.
-#define protected public
+// Friend class for accessing protected members
+class CrystalBindingAccess {
+protected:
+    // Classes that need to be wrapped can declare this as a friend
+    friend class CrystalWrapper;
+};
 
 template<int, typename Callable, typename Ret, typename... Args>
 auto fnptr_(Callable&& c, Ret (*)(Args...))
 {
-    static std::decay_t<Callable> storage = std::forward<Callable>(c);
-    static bool used = false;
-    if(used)
-    {
+    // Use thread_local for thread safety
+    thread_local std::decay_t<Callable> storage = std::forward<Callable>(c);
+    thread_local bool used = false;
+    if (used) {
         using type = decltype(storage);
         storage.~type();
         new (&storage) type(std::forward<Callable>(c));
@@ -65,11 +78,9 @@ struct CrystalProcedure {
     return (withSelf != nullptr);
   }
 
-  /* Fun fact: If the Crystal `Proc` doesn't capture any context, it won't
-   * allocate any - But also don't expect any!  We have to accomodate for this
-   * by only passing `this->self` if it is non-NULL.
+  /* If the Crystal `Proc` doesn't capture context, it won't allocate any.
+   * We only pass `this->self` if it is non-NULL.
    */
-
   T operator()(Args ... arguments) const {
     if (this->self) {
       return this->withSelf(this->self, arguments...);
@@ -80,7 +91,7 @@ struct CrystalProcedure {
 };
 
 template <typename T>
-struct CrystalGCWrapper: public T, public gc_cleanup
+struct CrystalGCWrapper : public T, public gc_cleanup
 {
   using T::T;
 };
@@ -98,4 +109,4 @@ struct bg_deref {
 };
 
 #endif // __cplusplus
-#endif
+#endif // MEDUSA_HELPERS_HPP

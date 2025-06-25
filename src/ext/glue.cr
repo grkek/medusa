@@ -3,16 +3,16 @@ require "../medusa/binding/quickjs"
 module Glue
   alias QuickJS = Medusa::Binding::QuickJS
 
-  # Wraps `Proc` to a `Binding::CrystalProcedure`, which can then passed on to C++.
-  def self.wrap_procedure(procedure : Proc)
+  # Wraps a Crystal `Proc` into a `QuickJS::CrystalProcedure` for C++ interop.
+  # The Proc must match the QuickJS function signature.
+  def self.wrap_procedure(procedure : Proc(Medusa::Binding::QuickJS::JSContext, Medusa::Binding::QuickJS::JSValue, Int32, Pointer(Medusa::Binding::QuickJS::JSValue), Medusa::Binding::QuickJS::JSValue))
     QuickJS::CrystalProcedure.new(
       pointer: procedure.pointer,
       context: procedure.closure_data,
     )
   end
 
-  # Wraps `Proc` to a `Binding::CrystalProcedure`, which can then passed on to C++.
-  # `Nil` version, returns a null-proc.
+  # Returns a null `QuickJS::CrystalProcedure` for cases where no procedure is provided.
   def self.wrap_procedure(nothing : Nil)
     QuickJS::CrystalProcedure.new(
       pointer: Pointer(Void).null,
@@ -20,9 +20,12 @@ module Glue
     )
   end
 
-  # Wraps a *list* into a container *wrapper*, if it's not already one.
+  # Wraps a list into a container wrapper if it's not already one.
   macro wrap_container(wrapper, list)
     %instance = {{ list }}
+    {% unless list.resolve <= Enumerable %}
+      {% raise "Expected Enumerable type for list, got #{list.resolve}" %}
+    {% end %}
     if %instance.is_a?({{ wrapper }})
       %instance
     else
@@ -30,27 +33,20 @@ module Glue
     end
   end
 
-  # Wrapper for an instantiated, sequential container type.
-  #
-  # This offers (almost) all read-only methods known from `Array`.
-  # Additionally, there's `#<<`.  Other than that, the container type is not
-  # meant to be used for storage, but for data transmission between the C++
-  # and the Crystal world.  Don't let that discourage you though.
+  # Wrapper for an instantiated, sequential container type for data transmission.
   module SequentialContainer(T)
     include Indexable(T)
 
-    # `#unsafe_fetch` and `#size` will be implemented by the wrapper class.
-
-    # Adds an element at the end.  Implemented by the wrapper.
+    # Adds an element at the end. Must be implemented by the wrapper.
     abstract def push(value : T)
 
-    # Adds *element* at the end of the container.
+    # Adds an element at the end of the container.
     def <<(value : T) : self
       push(value)
       self
     end
 
-    # Adds all *elements* at the end of the container, retaining their order.
+    # Adds all elements at the end of the container, retaining their order.
     def concat(values : Enumerable(T)) : self
       values.each { |v| push(v) }
       self

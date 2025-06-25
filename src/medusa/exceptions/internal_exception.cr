@@ -1,12 +1,11 @@
 module Medusa
   module Exceptions
     class InternalException < Exception
+      getter stack : String? = nil
+
       def initialize(message : String, stack : String?)
-        @message = String.build do |string|
-          string << "An internal exception occured\n"
-          string << "\t    Message: #{message}\n"
-          string << "\t      Stack: #{stack}"
-        end
+        @stack = stack
+        @message = message
       end
     end
   end
