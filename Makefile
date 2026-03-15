@@ -4,7 +4,7 @@ UNAME_M := $(shell uname -m)
 
 # Compiler and base flags
 CC = cc
-CXXFLAGS = -std=c++20
+CXXFLAGS = -std=c++20 -O2 -DNDEBUG
 LDFLAGS = -lgc
 
 # Platform-specific paths
@@ -37,7 +37,11 @@ build:
 	ar rcs $(BIN_DIR)/medusa.a $(BIN_DIR)/*.o
 
 quickjs:
-	cd ./src/ext/quickjs && make all
+	@# Ensure -DNDEBUG is in QuickJS CFLAGS to disable gc_obj_list assertion
+	@cd ./src/ext/quickjs && \
+		grep -q 'DNDEBUG' Makefile || \
+		sed -i.bak 's/^CFLAGS_OPT=$$(CFLAGS) -O2/CFLAGS_OPT=$$(CFLAGS) -O2 -DNDEBUG/' Makefile
+	cd ./src/ext/quickjs && make libquickjs.a
 
 test:
 	make quickjs

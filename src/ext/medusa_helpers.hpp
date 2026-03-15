@@ -6,11 +6,13 @@
 #include <stdlib.h> // abort()
 #include <stdio.h> // fprintf()
 
-// Compiler branching hint, guarded for portability
+// Compiler branching hints, guarded for portability
 #ifdef __GNUC__
 #define LIKELY(x) __builtin_expect(!!(x), 1)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
 #else
 #define LIKELY(x) (x)
+#define UNLIKELY(x) (x)
 #endif
 
 // Fatal error handler
@@ -33,7 +35,6 @@ static void fatal_panic(const char *message) {
 // Friend class for accessing protected members
 class CrystalBindingAccess {
 protected:
-    // Classes that need to be wrapped can declare this as a friend
     friend class CrystalWrapper;
 };
 
@@ -78,9 +79,6 @@ struct CrystalProcedure {
     return (withSelf != nullptr);
   }
 
-  /* If the Crystal `Proc` doesn't capture context, it won't allocate any.
-   * We only pass `this->self` if it is non-NULL.
-   */
   T operator()(Args ... arguments) const {
     if (this->self) {
       return this->withSelf(this->self, arguments...);
@@ -96,8 +94,6 @@ struct CrystalGCWrapper : public T, public gc_cleanup
   using T::T;
 };
 
-/// A simple wrapper around a non-pointer type that allows a single
-/// dereference operation.
 template <typename T>
 struct bg_deref {
   T data;
