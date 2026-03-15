@@ -5,7 +5,7 @@ authors:
   - Giorgi Kavrelishvili <giorgi.kavrelishvili@pm.me>
 
 scripts:
-  postinstall: "make clean && make quickjs && make build"
+  postinstall: git submodule update --init --recursive && make clean && make quickjs && make build
 
 crystal: 1.9.2
 
