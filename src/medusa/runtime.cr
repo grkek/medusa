@@ -13,8 +13,6 @@ module Medusa
       @runtime
     end
 
-    # --- Memory configuration ---
-
     def memory_limit=(limit : UInt64) : Nil
       QuickJS.JS_SetMemoryLimit(@runtime, limit)
     end
@@ -31,13 +29,9 @@ module Medusa
       QuickJS.JS_UpdateStackTop(@runtime)
     end
 
-    # --- Runtime info ---
-
     def info=(info : String) : Nil
       QuickJS.JS_SetRuntimeInfo(@runtime, info)
     end
-
-    # --- Opaque data (attach arbitrary pointer to runtime) ---
 
     def opaque : Void*
       QuickJS.JS_GetRuntimeOpaque(@runtime)
@@ -47,8 +41,6 @@ module Medusa
       QuickJS.JS_SetRuntimeOpaque(@runtime, ptr)
     end
 
-    # --- GC ---
-
     def run_gc : Nil
       QuickJS.JS_RunGC(@runtime)
     end
@@ -57,15 +49,11 @@ module Medusa
       QuickJS.JS_IsLiveObject(@runtime, obj) != 0
     end
 
-    # --- Memory usage ---
-
     def memory_usage : QuickJS::JSMemoryUsage
       usage = QuickJS::JSMemoryUsage.new
       QuickJS.JS_ComputeMemoryUsage(@runtime, pointerof(usage))
       usage
     end
-
-    # --- Job queue (microtasks / promises) ---
 
     def job_pending? : Bool
       QuickJS.JS_IsJobPending(@runtime) != 0
@@ -102,8 +90,6 @@ module Medusa
       count
     end
 
-    # --- Strip info ---
-
     def strip_info=(flags : QuickJS::StripFlag) : Nil
       QuickJS.JS_SetStripInfo(@runtime, flags.value)
     end
@@ -112,13 +98,9 @@ module Medusa
       QuickJS.JS_GetStripInfo(@runtime)
     end
 
-    # --- Blocking ---
-
     def can_block=(val : Bool) : Nil
       QuickJS.JS_SetCanBlock(@runtime, val ? 1 : 0)
     end
-
-    # --- Module loader ---
 
     # Enables file-based ES module loading. After calling this, all contexts
     # on this runtime can use `import` / `export` with file paths.
@@ -127,8 +109,6 @@ module Medusa
     def setup_module_loader : Nil
       QuickJS.SetupFileModuleLoader(@runtime)
     end
-
-    # --- Cleanup ---
 
     def freed? : Bool
       @freed

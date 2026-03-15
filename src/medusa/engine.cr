@@ -92,8 +92,6 @@ module Medusa
       ValueWrapper.new(context.to_unsafe, false)
     end
 
-    # --- Cleanup ---
-
     # Shuts down the engine. The C++ FreeContextAndRuntime handles the
     # QuickJS gc_obj_list assertion issue caused by Crystal ValueWrappers
     # that haven't been GC'd yet.

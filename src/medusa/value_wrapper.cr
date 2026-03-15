@@ -6,8 +6,6 @@ module Medusa
     @value : QuickJS::JSValue
     @freed : Bool = false
 
-    # --- Constructors ---
-
     def initialize(@context : QuickJS::JSContext, value : QuickJS::JSValue)
       @value = value
     end
@@ -48,8 +46,6 @@ module Medusa
       end
     end
 
-    # --- Tag helpers ---
-
     private def tag : Int64
       @value.tag
     end
@@ -57,8 +53,6 @@ module Medusa
     private def object_tag? : Bool
       tag == QuickJS::Tag::OBJECT.value
     end
-
-    # --- Indexed access (arrays) ---
 
     def [](index : Int32) : ValueWrapper
       raise Exception.new("Cannot fetch property at #{index}: not an object") unless object_tag?
@@ -84,8 +78,6 @@ module Medusa
       value
     end
 
-    # --- Keyed access (objects) ---
-
     def [](key : String) : ValueWrapper
       raise Exception.new("Cannot fetch property '#{key}': not an object") unless object_tag?
       value = ValueWrapper.new(@context, QuickJS.JS_GetPropertyStr(@context, @value, key))
@@ -110,8 +102,6 @@ module Medusa
       value
     end
 
-    # --- Atom-based property access ---
-
     def get_property(atom : QuickJS::JSAtom) : ValueWrapper
       ValueWrapper.new(@context, QuickJS.GetProperty(@context, @value, atom))
     end
@@ -124,8 +114,6 @@ module Medusa
       QuickJS.JS_DeleteProperty(@context, @value, atom, flags) > 0
     end
 
-    # --- Prototype ---
-
     def prototype : ValueWrapper
       ValueWrapper.new(@context, QuickJS.JS_GetPrototype(@context, @value))
     end
@@ -133,8 +121,6 @@ module Medusa
     def prototype=(proto : ValueWrapper) : Nil
       QuickJS.JS_SetPrototype(@context, @value, proto.to_unsafe)
     end
-
-    # --- Define property ---
 
     def define_property_value(atom : QuickJS::JSAtom, val : ValueWrapper, flags : Int32 = Constants::JS_PROP_C_W_E) : Nil
       duped = QuickJS.DupValue(@context, val.to_unsafe)
@@ -144,8 +130,6 @@ module Medusa
       end
     end
 
-    # --- Equality ---
-
     def ==(other : self) : Bool
       QuickJS.JS_StrictEq(@context, @value, other.to_unsafe) != 0
     end
@@ -153,8 +137,6 @@ module Medusa
     def same_value?(other : self) : Bool
       QuickJS.JS_SameValue(@context, @value, other.to_unsafe) != 0
     end
-
-    # --- Type checks ---
 
     def undefined? : Bool
       QuickJS.IsUndefined(@value)
@@ -212,8 +194,6 @@ module Medusa
       object_tag? && QuickJS.JS_IsConstructor(@context, @value) != 0
     end
 
-    # --- Conversion to Crystal types ---
-
     def as_s : String
       c_string = QuickJS.ToCString(@context, @value)
       value = String.new(c_string)
@@ -244,8 +224,6 @@ module Medusa
       QuickJS.JS_ToBigInt64(@context, out value, @value)
       value
     end
-
-    # --- Conversion to JSON::Any compatible types ---
 
     def as_a : Array(JSON::Any)
       array = [] of JSON::Any
@@ -288,13 +266,9 @@ module Medusa
       hash
     end
 
-    # --- Conversion to JSON::Any (self) ---
-
     def to_json_any : JSON::Any
       js_value_to_json_any(@value)
     end
-
-    # --- Calling (if this value is a function) ---
 
     def call(this_obj : ValueWrapper, args : Array(ValueWrapper) = [] of ValueWrapper) : ValueWrapper
       argc = args.size
@@ -334,8 +308,6 @@ module Medusa
       ValueWrapper.new(@context, result)
     end
 
-    # --- Opaque data (for custom classes) ---
-
     def set_opaque(ptr : Void*) : Nil
       QuickJS.JS_SetOpaque(@value, ptr)
     end
@@ -348,8 +320,6 @@ module Medusa
       QuickJS.JS_GetOpaque2(@context, @value, class_id)
     end
 
-    # --- Raw value access ---
-
     def to_unsafe : QuickJS::JSValue
       @value
     end
@@ -357,8 +327,6 @@ module Medusa
     def duplicate : QuickJS::JSValue
       QuickJS.DupValue(@context, @value)
     end
-
-    # --- ToString for debugging ---
 
     def to_s(io : IO) : Nil
       case
@@ -374,15 +342,11 @@ module Medusa
       end
     end
 
-    # --- Explicit free — call when you know the context is still alive ---
-
     def free! : Nil
       return if @freed
       @freed = true
       QuickJS.FreeValue(@context, @value)
     end
-
-    # --- Cleanup ---
     # GC finalizer. We intentionally do NOT call FreeValue here.
     #
     # Boehm GC runs finalizers in non-deterministic order and can trigger
@@ -399,8 +363,6 @@ module Medusa
     def finalize
       # No-op. Prevent use-after-free on dangling context pointers.
     end
-
-    # --- JSON conversion helper ---
 
     private def js_value_to_json_any(val : QuickJS::JSValue) : JSON::Any
       val_tag = val.tag
@@ -430,8 +392,6 @@ module Medusa
         JSON::Any.new(nil)
       end
     end
-
-    # --- JSON::Any -> ValueWrapper ---
 
     def from_json(value : JSON::Any) : ValueWrapper
       case value.raw

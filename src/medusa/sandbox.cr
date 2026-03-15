@@ -1,21 +1,4 @@
 module Medusa
-  # Thread-safe wrapper around `Medusa::Engine` for sandboxed JavaScript execution.
-  #
-  # Designed for long-lived contexts like GUI event loops where multiple fibers
-  # may need to evaluate JS. All public methods acquire the mutex unless noted.
-  #
-  # The key GC design principle: Crystal closures that cross into QuickJS are
-  # wrapped once via `bind`/`bind_raw` and stored as QuickJS function objects.
-  # This avoids repeatedly passing Crystal Proc objects through the FFI boundary,
-  # which is what caused GC issues with Duktape — the Crystal GC could collect
-  # a Proc whose closure data was still referenced from the JS side.
-  #
-  # ```
-  # sandbox = Medusa::Sandbox.new
-  # sandbox.eval!("1 + 2")                        # => ValueWrapper (3)
-  # sandbox.eval_mutex!("globalThis.x = 42")       # thread-safe eval
-  # sandbox.bind("log", 1) { |args| puts args[0].as_s; nil }
-  # ```
   class Sandbox
     Log = ::Log.for(self)
 
@@ -24,42 +7,69 @@ module Medusa
     getter engine : Engine
 
     @mutex : Mutex
-    # Prevents Boehm GC from collecting closures that have been passed to
-    # QuickJS via bind/bind_raw. Without this, the GC sees no Crystal-side
-    # reference to the Proc's closure data and collects it, causing SIGBUS/
-    # SIGSEGV when QuickJS later invokes the callback.
     @prevent_gc : Array(Proc(QuickJS::JSContext, QuickJS::JSValue, LibC::Int, QuickJS::JSValue*, QuickJS::JSValue))
 
     def initialize
       @engine = Engine.new
       @mutex = Mutex.new(:reentrant)
       @prevent_gc = [] of Proc(QuickJS::JSContext, QuickJS::JSValue, LibC::Int, QuickJS::JSValue*, QuickJS::JSValue)
+      Log.info { "Sandbox initialized" }
     end
 
     def initialize(*, raw : Bool)
       @engine = Engine.new(raw: raw)
       @mutex = Mutex.new(:reentrant)
       @prevent_gc = [] of Proc(QuickJS::JSContext, QuickJS::JSValue, LibC::Int, QuickJS::JSValue*, QuickJS::JSValue)
+      Log.info { "Sandbox initialized (raw: #{raw})" }
     end
 
-    # --- Evaluation ---
+    # JS keyword highlighting for log output
+    private JS_KEYWORDS = %w[
+      function var const let return if else for while do switch case break
+      continue new delete typeof instanceof in of this true false null undefined
+      try catch finally throw class extends import export default from async await
+      Object Array JSON Math String Number Boolean
+    ]
 
-    # Evaluates JS WITHOUT mutex protection. Use only when you already hold a lock.
+    private def format_js(source : String) : String
+      lines = source.strip.split('\n')
+
+      String.build do |io|
+        lines.each_with_index do |line, i|
+          formatted = line
+            .gsub(/("(?:[^"\\]|\\.)*")/) { |m| "\e[33m#{m}\e[0m" }                          # strings → yellow
+            .gsub(/('(?:[^'\\]|\\.)*')/) { |m| "\e[33m#{m}\e[0m" }                           # strings → yellow
+            .gsub(/(\/\/.*)$/) { |m| "\e[90m#{m}\e[0m" }                                     # comments → gray
+            .gsub(/\b(\d+\.?\d*)\b/) { |m| "\e[36m#{m}\e[0m" }                               # numbers → cyan
+            .gsub(/\b(#{JS_KEYWORDS.join("|")})\b/) { |m| "\e[35m#{m}\e[0m" }                # keywords → magenta
+
+          line_num = (i + 1).to_s.rjust(3)
+          io << "  \e[90m#{line_num} │\e[0m #{formatted}\n"
+        end
+      end
+    end
+
     def eval!(source_code : String, flag : QuickJS::EvalFlag = QuickJS::EvalFlag::STRICT, tag : String = "<input>") : ValueWrapper
+      Log.debug {
+        header = "\e[1meval!\e[0m #{source_code.bytesize} bytes, tag: \e[36m#{tag}\e[0m"
+
+        String.build do |io|
+          io << header << "\n"
+          io << format_js(source_code)
+        end
+      }
       engine.eval_string(source_code, eval_flag: flag, etag: tag)
     end
 
-    # Evaluates JS WITH mutex protection. Safe from any fiber.
     def eval_mutex!(source_code : String, flag : QuickJS::EvalFlag = QuickJS::EvalFlag::STRICT, tag : String = "<input>") : ValueWrapper
       @mutex.synchronize do
         eval!(source_code, flag, tag)
       end
     end
 
-    # --- File loading ---
-
     def load_file!(path : String) : ValueWrapper
       resolved = File.expand_path(path)
+      Log.info { "Loading file: #{resolved}" }
       raise_file_not_found(resolved) unless File.exists?(resolved)
       source_code = File.read(resolved)
       eval_mutex!(source_code, tag: resolved)
@@ -67,28 +77,24 @@ module Medusa
 
     def load_module!(path : String) : ValueWrapper
       resolved = File.expand_path(path)
+      Log.info { "Loading module: #{resolved}" }
       raise_file_not_found(resolved) unless File.exists?(resolved)
       source_code = File.read(resolved)
       eval_mutex!(source_code, flag: QuickJS::EvalFlag::MODULE, tag: resolved)
     end
 
-    # Auto-detects whether a file is a module or script.
     def load_auto!(path : String) : ValueWrapper
       resolved = File.expand_path(path)
       raise_file_not_found(resolved) unless File.exists?(resolved)
       source_code = File.read(resolved)
-      flag = engine.context.detect_module?(source_code) ? QuickJS::EvalFlag::MODULE : QuickJS::EvalFlag::STRICT
+      is_module = engine.context.detect_module?(source_code)
+      flag = is_module ? QuickJS::EvalFlag::MODULE : QuickJS::EvalFlag::STRICT
+      Log.info { "Loading #{is_module ? "module" : "script"}: #{resolved}" }
       eval_mutex!(source_code, flag: flag, tag: resolved)
     end
 
-    # --- Function binding ---
-
-    # Binds a raw QuickJS C-function signature. The proc receives the raw
-    # JSContext, this_val, argc, argv and must return a JSValue.
-    # Use this for maximum performance / minimal GC overhead.
     def bind_raw(name : String, arg_count : Int32 = 0, &block : Proc(QuickJS::JSContext, QuickJS::JSValue, LibC::Int, QuickJS::JSValue*, QuickJS::JSValue)) : Nil
-      # Pin the closure so Boehm GC doesn't collect it while QuickJS holds
-      # a reference to the closure data via CrystalProcedure.
+      Log.debug { "bind_raw: #{name} (#{arg_count} args)" }
       @prevent_gc << block
 
       @mutex.synchronize do
@@ -98,13 +104,11 @@ module Medusa
       end
     end
 
-    # Binds a Crystal block as a global JS function. Arguments are wrapped
-    # as ValueWrappers. Return any Crystal value and it'll be converted to JS.
     def bind(name : String, arg_count : Int32 = 0, &block : Array(ValueWrapper) -> _) : Nil
+      Log.debug { "bind: #{name} (#{arg_count} args)" }
       bind_raw(name, arg_count) do |ctx, _this_val, argc, argv|
         args = Array(ValueWrapper).new(argc)
         argc.times do |i|
-          # DupValue so the wrapper owns its own reference
           args << ValueWrapper.new(ctx, QuickJS.DupValue(ctx, argv[i]))
         end
 
@@ -113,9 +117,8 @@ module Medusa
       end
     end
 
-    # --- Global variables ---
-
     def set_global(name : String, value) : Nil
+      Log.debug { "set_global: #{name}" }
       @mutex.synchronize do
         global = engine.context.global_object
         global[name] = engine.create_value(value)
@@ -123,6 +126,7 @@ module Medusa
     end
 
     def get_global(name : String) : ValueWrapper?
+      Log.debug { "get_global: #{name}" }
       @mutex.synchronize do
         global = engine.context.global_object
         value = global[name]?
@@ -131,9 +135,8 @@ module Medusa
       end
     end
 
-    # --- Function calling ---
-
     def call_global(name : String, arguments : Array = [] of ValueWrapper) : ValueWrapper
+      Log.debug { "call_global: #{name} (#{arguments.size} args)" }
       @mutex.synchronize do
         global = engine.context.global_object
         func = global[name]
@@ -149,55 +152,53 @@ module Medusa
       end
     end
 
-    # --- JSON ---
-
     def parse_json(input : String) : ValueWrapper
+      Log.debug { "parse_json (#{input.bytesize} bytes)" }
       @mutex.synchronize do
         engine.context.parse_json(input)
       end
     end
 
     def json_stringify(obj : ValueWrapper) : String
+      Log.debug { "json_stringify" }
       @mutex.synchronize do
         engine.context.json_stringify(obj)
       end
     end
 
-    # --- Bytecode serialization ---
-
-    # Compiles JS to bytecode without executing it.
     def compile(source_code : String, tag : String = "<compile>") : Bytes
+      Log.info { "Compiling to bytecode (#{source_code.bytesize} bytes, tag: #{tag})" }
       @mutex.synchronize do
         val = engine.context.eval_string(
           source_code,
           eval_flag: QuickJS::EvalFlag::STRICT | QuickJS::EvalFlag::COMPILE_ONLY,
           etag: tag
         )
-        engine.context.write_object(val)
+        bytecode = engine.context.write_object(val)
+        Log.debug { "Compiled: #{source_code.bytesize} bytes source → #{bytecode.size} bytes bytecode" }
+        bytecode
       end
     end
 
-    # Loads and executes precompiled bytecode.
     def load_bytecode(bytecode : Bytes) : ValueWrapper
+      Log.info { "Loading bytecode (#{bytecode.size} bytes)" }
       @mutex.synchronize do
         obj = engine.context.read_object(bytecode)
-        # JS_EvalFunction consumes the reference and executes it
         result = QuickJS.JS_EvalFunction(engine.context.to_unsafe, obj.to_unsafe)
         ValueWrapper.new(engine.context.to_unsafe, result)
       end
     end
 
-    # --- Promise / job queue ---
-
     def drain_jobs : Int32
       @mutex.synchronize do
-        engine.drain_jobs
+        count = engine.drain_jobs
+        Log.debug { "Drained #{count} pending job(s)" } if count > 0
+        count
       end
     end
 
-    # --- GC ---
-
     def run_gc : Nil
+      Log.debug { "Running GC" }
       @mutex.synchronize do
         engine.runtime.run_gc
       end
@@ -209,25 +210,23 @@ module Medusa
       end
     end
 
-    # --- Runtime configuration ---
-
     def memory_limit=(limit : UInt64) : Nil
+      Log.debug { "Memory limit set: #{limit} bytes" }
       engine.runtime.memory_limit = limit
     end
 
     def max_stack_size=(size : UInt64) : Nil
+      Log.debug { "Max stack size set: #{size} bytes" }
       engine.runtime.max_stack_size = size
     end
 
     def gc_threshold=(threshold : UInt64) : Nil
+      Log.debug { "GC threshold set: #{threshold} bytes" }
       engine.runtime.gc_threshold = threshold
     end
 
-    # --- Cleanup ---
-
-    # Explicitly shuts down the sandbox and its engine.
-    # Always call this when you're done — don't rely on GC finalization.
     def close : Nil
+      Log.info { "Closing sandbox (#{@prevent_gc.size} pinned closure(s))" }
       @prevent_gc.clear
       @engine.close
     end
@@ -239,8 +238,6 @@ module Medusa
     def finalize
       close
     end
-
-    # --- Private helpers ---
 
     private def crystal_to_js_value(ctx : QuickJS::JSContext, value) : QuickJS::JSValue
       case value
@@ -257,7 +254,6 @@ module Medusa
       when Bool
         QuickJS.NewBool(ctx, value ? 1 : 0)
       when Nil
-        # Return JS undefined — construct directly, no eval needed.
         QuickJS::JSValue.new(
           u: QuickJS::ValueUnion.new(int32: 0_i32),
           tag: QuickJS::Tag::UNDEFINED.value
@@ -268,6 +264,7 @@ module Medusa
     end
 
     private def raise_file_not_found(path : String) : NoReturn
+      Log.error { "File not found: #{path}" }
       raise Exceptions::RuntimeException.new(
         message: "File not found: #{path}",
         input: path,

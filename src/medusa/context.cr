@@ -23,8 +23,6 @@ module Medusa
       @context
     end
 
-    # --- Opaque data ---
-
     def opaque : Void*
       QuickJS.JS_GetContextOpaque(@context)
     end
@@ -36,8 +34,6 @@ module Medusa
     def runtime : QuickJS::JSRuntime
       QuickJS.JS_GetRuntime(@context)
     end
-
-    # --- Intrinsics (for raw contexts) ---
 
     def add_intrinsic_base_objects : Nil
       QuickJS.JS_AddIntrinsicBaseObjects(@context)
@@ -103,8 +99,6 @@ module Medusa
       add_intrinsic_weak_ref
     end
 
-    # --- Eval ---
-
     def eval_string(input : String, eval_flag : QuickJS::EvalFlag = QuickJS::EvalFlag::STRICT, etag : String = "<input>") : ValueWrapper
       value = QuickJS.JS_Eval(@context, input, input.bytesize, etag, eval_flag.value)
 
@@ -146,8 +140,6 @@ module Medusa
       QuickJS.JS_DetectModule(input, input.bytesize) != 0
     end
 
-    # --- Function binding ---
-
     # Binds a Crystal Proc as a QuickJS function. Returns a ValueWrapper
     # for the JS function object. Each binding is independent — no shared state.
     def bind_crystal_function(procedure : Proc(QuickJS::JSContext, QuickJS::JSValue, LibC::Int, QuickJS::JSValue*, QuickJS::JSValue), name : String, length : LibC::Int) : ValueWrapper
@@ -159,13 +151,9 @@ module Medusa
       ValueWrapper.new(@context, QuickJS.JS_NewCFunction2(@context, function_pointer, name, length, cproto, magic))
     end
 
-    # --- Global object ---
-
     def global_object : ValueWrapper
       ValueWrapper.new(@context, QuickJS.JS_GetGlobalObject(@context))
     end
-
-    # --- Exception checking ---
 
     def has_exception? : Bool
       QuickJS.JS_HasException(@context) != 0
@@ -174,8 +162,6 @@ module Medusa
     def get_exception : ValueWrapper
       ValueWrapper.new(@context, QuickJS.JS_GetException(@context))
     end
-
-    # --- JSON ---
 
     def parse_json(input : String, filename : String = "<json>") : ValueWrapper
       value = QuickJS.JS_ParseJSON(@context, input, input.bytesize, filename)
@@ -196,8 +182,6 @@ module Medusa
       wrapper = ValueWrapper.new(@context, result)
       wrapper.as_s
     end
-
-    # --- Object serialization (bytecode) ---
 
     def write_object(obj : ValueWrapper, flags : QuickJS::WriteObjFlag = QuickJS::WriteObjFlag::BYTECODE) : Bytes
       size = uninitialized LibC::SizeT
@@ -220,8 +204,6 @@ module Medusa
       ValueWrapper.new(@context, value)
     end
 
-    # --- Class registration ---
-
     def self.new_class_id : QuickJS::JSClassID
       id = 0_u32
       QuickJS.JS_NewClassID(pointerof(id))
@@ -235,8 +217,6 @@ module Medusa
     def get_class_proto(class_id : QuickJS::JSClassID) : ValueWrapper
       ValueWrapper.new(@context, QuickJS.JS_GetClassProto(@context, class_id))
     end
-
-    # --- Cleanup ---
 
     def freed? : Bool
       @freed
