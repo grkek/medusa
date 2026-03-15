@@ -30,8 +30,18 @@ SRC_DIR = ./src/ext
 BIN_DIR = ./bin
 OBJ_FILES = $(patsubst $(SRC_DIR)/%.cpp,$(BIN_DIR)/%.o,$(wildcard $(SRC_DIR)/*.cpp))
 
-submodules:
-	git submodule update --init --recursive
+QUICKJS_DIR = ./src/ext/quickjs
+QUICKJS_REPO = https://github.com/bellard/quickjs
+
+fetch-quickjs:
+	@if [ ! -f $(QUICKJS_DIR)/Makefile ]; then \
+		echo "QuickJS not found, fetching..."; \
+		if git submodule status $(QUICKJS_DIR) > /dev/null 2>&1; then \
+			git submodule update --init --recursive; \
+		else \
+			git clone --depth 1 $(QUICKJS_REPO) $(QUICKJS_DIR); \
+		fi \
+	fi
 
 build:
 	mkdir -p $(BIN_DIR)
@@ -39,12 +49,12 @@ build:
 	mv *.o $(BIN_DIR)/
 	ar rcs $(BIN_DIR)/medusa.a $(BIN_DIR)/*.o
 
-quickjs: submodules
+quickjs: fetch-quickjs
 	@# Ensure -DNDEBUG is in QuickJS CFLAGS to disable gc_obj_list assertion
-	@cd ./src/ext/quickjs && \
+	@cd $(QUICKJS_DIR) && \
 		grep -q 'DNDEBUG' Makefile || \
 		sed -i.bak 's/^CFLAGS_OPT=$$(CFLAGS) -O2/CFLAGS_OPT=$$(CFLAGS) -O2 -DNDEBUG/' Makefile
-	cd ./src/ext/quickjs && make libquickjs.a
+	cd $(QUICKJS_DIR) && make libquickjs.a
 
 test:
 	make quickjs
@@ -53,6 +63,6 @@ test:
 
 clean:
 	rm -rf $(BIN_DIR)/*
-	@if [ -f ./src/ext/quickjs/Makefile ]; then cd ./src/ext/quickjs && make clean; fi
+	@if [ -f $(QUICKJS_DIR)/Makefile ]; then cd $(QUICKJS_DIR) && make clean; fi
 
-.PHONY: build quickjs test clean submodules
+.PHONY: build quickjs test clean fetch-quickjs
