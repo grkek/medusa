@@ -30,13 +30,16 @@ SRC_DIR = ./src/ext
 BIN_DIR = ./bin
 OBJ_FILES = $(patsubst $(SRC_DIR)/%.cpp,$(BIN_DIR)/%.o,$(wildcard $(SRC_DIR)/*.cpp))
 
+submodules:
+	git submodule update --init --recursive
+
 build:
 	mkdir -p $(BIN_DIR)
 	$(CC) $(CXXFLAGS) -c $(SRC_DIR)/*.cpp
 	mv *.o $(BIN_DIR)/
 	ar rcs $(BIN_DIR)/medusa.a $(BIN_DIR)/*.o
 
-quickjs:
+quickjs: submodules
 	@# Ensure -DNDEBUG is in QuickJS CFLAGS to disable gc_obj_list assertion
 	@cd ./src/ext/quickjs && \
 		grep -q 'DNDEBUG' Makefile || \
@@ -50,6 +53,6 @@ test:
 
 clean:
 	rm -rf $(BIN_DIR)/*
-	cd ./src/ext/quickjs && make clean
+	@if [ -f ./src/ext/quickjs/Makefile ]; then cd ./src/ext/quickjs && make clean; fi
 
-.PHONY: build quickjs test clean
+.PHONY: build quickjs test clean submodules
